@@ -23,11 +23,14 @@ namespace Back.Controllers
             _context = context;
         }
 
-        // GET ALL COURSES (PUBLIC)
+        // =====================================================
+        // STUDENT / PUBLIC: GET ALL PUBLISHED COURSES
+        // =====================================================
         [HttpGet]
         public async Task<ActionResult<IEnumerable<CourseReadDto>>> GetCourses()
         {
             var courses = await _context.Courses
+                .Where(c => c.IsPublished)
                 .Select(c => new CourseReadDto
                 {
                     Id = c.Id,
@@ -43,34 +46,37 @@ namespace Back.Controllers
             return Ok(courses);
         }
 
-        // GET COURSE BY ID
-        [HttpGet("{id}")]
-        public async Task<ActionResult<CourseReadDto>> GetCourse(int id)
-        {
-            var course = await _context.Courses.FindAsync(id);
-            if (course == null) return NotFound();
-
-            return Ok(new CourseReadDto
-            {
-                Id = course.Id,
-                Title = course.Title,
-                ShortDescription = course.ShortDescription,
-                Category = course.Category,
-                Difficulty = course.Difficulty,
-                IsPublished = course.IsPublished,
-                CreatedAt = course.CreatedAt
-            });
-        }
-
-        // GET COURSES CREATED BY LOGGED-IN INSTRUCTOR
+        // =====================================================
+        // INSTRUCTOR: GET MY COURSES  ✅ (ORIGINAL ENDPOINT)
+        // =====================================================
         [Authorize(Roles = "Instructor,Admin")]
         [HttpGet("my")]
         public async Task<ActionResult<IEnumerable<CourseReadDto>>> GetMyCourses()
         {
-            var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier));
+            return await GetInstructorCoursesInternal();
+        }
+
+        // =====================================================
+        // INSTRUCTOR: GET MY COURSES (ALIAS)
+        // =====================================================
+        [Authorize(Roles = "Instructor,Admin")]
+        [HttpGet("instructor")]
+        public async Task<ActionResult<IEnumerable<CourseReadDto>>> GetInstructorCourses()
+        {
+            return await GetInstructorCoursesInternal();
+        }
+
+        // =====================================================
+        // SHARED LOGIC
+        // =====================================================
+        private async Task<ActionResult<IEnumerable<CourseReadDto>>> GetInstructorCoursesInternal()
+        {
+            var instructorId = int.Parse(
+                User.FindFirstValue(ClaimTypes.NameIdentifier)
+            );
 
             var courses = await _context.Courses
-                .Where(c => c.CreatedBy == userId)
+                .Where(c => c.CreatedBy == instructorId)
                 .Select(c => new CourseReadDto
                 {
                     Id = c.Id,
@@ -86,12 +92,29 @@ namespace Back.Controllers
             return Ok(courses);
         }
 
+        // =====================================================
+        // GET COURSE BY ID (FOR EDIT)
+        // =====================================================
+        [Authorize(Roles = "Instructor,Admin")]
+        [HttpGet("{id}")]
+        public async Task<ActionResult<Course>> GetCourse(int id)
+        {
+            var course = await _context.Courses.FindAsync(id);
+            if (course == null) return NotFound();
+
+            return Ok(course);
+        }
+
+        // =====================================================
         // CREATE COURSE
+        // =====================================================
         [Authorize(Roles = "Instructor,Admin")]
         [HttpPost]
-        public async Task<ActionResult<CourseReadDto>> CreateCourse(CourseCreateDto dto)
+        public async Task<IActionResult> CreateCourse(CourseCreateDto dto)
         {
-            var instructorId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier));
+            var instructorId = int.Parse(
+                User.FindFirstValue(ClaimTypes.NameIdentifier)
+            );
 
             var course = new Course
             {
@@ -103,22 +126,48 @@ namespace Back.Controllers
                 Thumbnail = dto.Thumbnail,
                 CreatedBy = instructorId,
                 CreatedAt = DateTime.UtcNow,
-                IsPublished = true // ✅ FIX
+                IsPublished = true
             };
 
             _context.Courses.Add(course);
             await _context.SaveChangesAsync();
+            return Ok();
+        }
 
-            return CreatedAtAction(nameof(GetCourse), new { id = course.Id }, new CourseReadDto
-            {
-                Id = course.Id,
-                Title = course.Title,
-                ShortDescription = course.ShortDescription,
-                Category = course.Category,
-                Difficulty = course.Difficulty,
-                IsPublished = course.IsPublished,
-                CreatedAt = course.CreatedAt
-            });
+        // =====================================================
+        // UPDATE COURSE
+        // =====================================================
+        [Authorize(Roles = "Instructor,Admin")]
+        [HttpPut("{id}")]
+        public async Task<IActionResult> UpdateCourse(int id, CourseCreateDto dto)
+        {
+            var course = await _context.Courses.FindAsync(id);
+            if (course == null) return NotFound();
+
+            course.Title = dto.Title;
+            course.ShortDescription = dto.ShortDescription;
+            course.LongDescription = dto.LongDescription;
+            course.Category = dto.Category;
+            course.Difficulty = dto.Difficulty;
+            course.Thumbnail = dto.Thumbnail;
+
+            await _context.SaveChangesAsync();
+            return NoContent();
+        }
+
+        // =====================================================
+        // DELETE COURSE
+        // =====================================================
+        [Authorize(Roles = "Instructor,Admin")]
+        [HttpDelete("{id}")]
+        public async Task<IActionResult> DeleteCourse(int id)
+        {
+            var course = await _context.Courses.FindAsync(id);
+            if (course == null) return NotFound();
+
+            _context.Courses.Remove(course);
+            await _context.SaveChangesAsync();
+            return NoContent();
         }
     }
 }

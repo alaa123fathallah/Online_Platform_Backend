@@ -12,7 +12,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Back.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20251230182627_InitialCreate")]
+    [Migration("20260102181358_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
@@ -284,6 +284,38 @@ namespace Back.Migrations
                     b.ToTable("Quizzes");
                 });
 
+            modelBuilder.Entity("Back.Entities.QuizAttempt", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("AttemptedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("Passed")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("QuizId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Score")
+                        .HasColumnType("int");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("QuizId");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("QuizAttempts");
+                });
+
             modelBuilder.Entity("Back.Entities.User", b =>
                 {
                     b.Property<int>("Id")
@@ -314,67 +346,6 @@ namespace Back.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("Users");
-                });
-
-            modelBuilder.Entity("QuizAttempt", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<bool>("IsGraded")
-                        .HasColumnType("bit");
-
-                    b.Property<bool>("IsPassed")
-                        .HasColumnType("bit");
-
-                    b.Property<int>("QuizId")
-                        .HasColumnType("int");
-
-                    b.Property<int?>("Score")
-                        .HasColumnType("int");
-
-                    b.Property<int>("UserId")
-                        .HasColumnType("int");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("QuizId");
-
-                    b.ToTable("QuizAttempts");
-                });
-
-            modelBuilder.Entity("StudentAnswer", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<int?>("PointsAwarded")
-                        .HasColumnType("int");
-
-                    b.Property<int>("QuestionId")
-                        .HasColumnType("int");
-
-                    b.Property<int>("QuizAttemptId")
-                        .HasColumnType("int");
-
-                    b.Property<int?>("SelectedAnswerId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("TextAnswer")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("QuizAttemptId");
-
-                    b.ToTable("StudentAnswer");
                 });
 
             modelBuilder.Entity("Back.Entities.Answer", b =>
@@ -485,22 +456,23 @@ namespace Back.Migrations
                     b.Navigation("Lesson");
                 });
 
-            modelBuilder.Entity("QuizAttempt", b =>
+            modelBuilder.Entity("Back.Entities.QuizAttempt", b =>
                 {
-                    b.HasOne("Back.Entities.Quiz", null)
-                        .WithMany("QuizAttempts")
+                    b.HasOne("Back.Entities.Quiz", "Quiz")
+                        .WithMany("Attempts")
                         .HasForeignKey("QuizId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-                });
 
-            modelBuilder.Entity("StudentAnswer", b =>
-                {
-                    b.HasOne("QuizAttempt", null)
-                        .WithMany("StudentAnswers")
-                        .HasForeignKey("QuizAttemptId")
+                    b.HasOne("Back.Entities.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.Navigation("Quiz");
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("Back.Entities.Course", b =>
@@ -524,14 +496,9 @@ namespace Back.Migrations
 
             modelBuilder.Entity("Back.Entities.Quiz", b =>
                 {
+                    b.Navigation("Attempts");
+
                     b.Navigation("Questions");
-
-                    b.Navigation("QuizAttempts");
-                });
-
-            modelBuilder.Entity("QuizAttempt", b =>
-                {
-                    b.Navigation("StudentAnswers");
                 });
 #pragma warning restore 612, 618
         }

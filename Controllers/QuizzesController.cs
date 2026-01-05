@@ -4,9 +4,7 @@ using Back.Entities;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using System;
-using System.Linq;
-using System.Threading.Tasks;
+using System.Security.Claims;
 
 namespace Back.Controllers
 {
@@ -21,34 +19,12 @@ namespace Back.Controllers
             _context = context;
         }
 
-        // ============================
-        // GET quizzes by course
-        // ============================
-        [HttpGet("course/{courseId}")]
-        public async Task<IActionResult> GetQuizzesByCourse(int courseId)
-        {
-            var quizzes = await _context.Quizzes
-                .Where(q => q.CourseId == courseId)
-                .Select(q => new QuizReadDto
-                {
-                    Id = q.Id,
-                    Title = q.Title,
-                    PassingScore = q.PassingScore,
-                    TimeLimit = q.TimeLimit,
-                    CourseId = q.CourseId,
-                    LessonId = q.LessonId
-                })
-                .ToListAsync();
-
-            return Ok(quizzes);
-        }
-
-        // ============================
-        // CREATE quiz
-        // ============================
-        [Authorize(Roles = "Instructor,Admin")]
+        // ===============================
+        // CREATE QUIZ
+        // ===============================
+        [Authorize(Roles = "Instructor")]
         [HttpPost]
-        public async Task<IActionResult> CreateQuiz(QuizCreateDto dto)
+        public async Task<IActionResult> CreateQuiz([FromBody] QuizCreateDto dto)
         {
             var quiz = new Quiz
             {
@@ -62,6 +38,151 @@ namespace Back.Controllers
             _context.Quizzes.Add(quiz);
             await _context.SaveChangesAsync();
 
+            return Ok(new { id = quiz.Id });
+        }
+
+        // ===============================
+        // UPDATE QUIZ  ✅ ADDED
+        // ===============================
+        [Authorize(Roles = "Instructor")]
+        [HttpPut("{id}")]
+        public async Task<IActionResult> UpdateQuiz(int id, [FromBody] QuizCreateDto dto)
+        {
+            var quiz = await _context.Quizzes.FindAsync(id);
+            if (quiz == null)
+                return NotFound();
+
+            quiz.Title = dto.Title;
+            quiz.CourseId = dto.CourseId;
+            quiz.LessonId = dto.LessonId;
+            quiz.PassingScore = dto.PassingScore;
+            quiz.TimeLimit = dto.TimeLimit;
+
+            await _context.SaveChangesAsync();
+            return Ok();
+        }
+
+        // ===============================
+        // DELETE QUIZ  ✅ ADDED
+        // ===============================
+        [Authorize(Roles = "Instructor")]
+        [HttpDelete("{id}")]
+        public async Task<IActionResult> DeleteQuiz(int id)
+        {
+            var quiz = await _context.Quizzes
+                .Include(q => q.Questions)
+                .ThenInclude(q => q.Answers)
+                .FirstOrDefaultAsync(q => q.Id == id);
+
+            if (quiz == null)
+                return NotFound();
+
+            _context.Quizzes.Remove(quiz);
+            await _context.SaveChangesAsync();
+
+            return Ok();
+        }
+
+        // ===============================
+        // ADD QUESTION TO QUIZ
+        // ===============================
+        [Authorize(Roles = "Instructor")]
+        [HttpPost("{quizId}/questions")]
+        public async Task<IActionResult> AddQuestion(int quizId, [FromBody] QuestionCreateDto dto)
+        {
+            var quizExists = await _context.Quizzes.AnyAsync(q => q.Id == quizId);
+            if (!quizExists)
+                return NotFound("Quiz not found");
+
+            var question = new Question
+            {
+                QuizId = quizId,
+                Text = dto.QuestionText,
+                Type = Enum.Parse<QuestionType>(dto.QuestionType),
+                Points = 1
+            };
+
+            _context.Questions.Add(question);
+            await _context.SaveChangesAsync();
+
+            if (dto.Answers != null && dto.Answers.Any())
+            {
+                foreach (var a in dto.Answers)
+                {
+                    _context.Answers.Add(new Answer
+                    {
+                        QuestionId = question.Id,
+                        Text = a.AnswerText,
+                        IsCorrect = a.IsCorrect
+                    });
+                }
+
+                await _context.SaveChangesAsync();
+            }
+
+            return Ok();
+        }
+
+        // ===============================
+        // GET QUESTIONS BY QUIZ
+        // ===============================
+        [Authorize]
+        [HttpGet("{quizId}/questions")]
+        public async Task<IActionResult> GetQuizQuestions(int quizId)
+        {
+            var questions = await _context.Questions
+                .Where(q => q.QuizId == quizId)
+                .Include(q => q.Answers)
+                .Select(q => new QuestionReadDto
+                {
+                    Id = q.Id,
+                    QuestionText = q.Text,
+                    QuestionType = q.Type.ToString(),
+                    Answers = q.Answers.Select(a => new AnswerReadDto
+                    {
+                        Id = a.Id,
+                        AnswerText = a.Text
+                    }).ToList()
+                })
+                .ToListAsync();
+
+            return Ok(questions);
+        }
+
+        // ===============================
+        // GET QUIZZES BY COURSE
+        // ===============================
+        [Authorize(Roles = "Instructor")]
+        [HttpGet("course/{courseId}")]
+        public async Task<IActionResult> GetQuizzesByCourse(int courseId)
+        {
+            var quizzes = await _context.Quizzes
+                .Where(q => q.CourseId == courseId)
+                .Select(q => new QuizReadDto
+                {
+                    Id = q.Id,
+                    Title = q.Title,
+                    CourseId = q.CourseId,
+                    LessonId = q.LessonId,
+                    PassingScore = q.PassingScore,
+                    TimeLimit = q.TimeLimit
+                })
+                .ToListAsync();
+
+            return Ok(quizzes);
+        }
+
+        // ===============================
+        // GET QUIZ BY ID
+        // ===============================
+        [Authorize]
+        [HttpGet("{id}")]
+        public async Task<IActionResult> GetQuiz(int id)
+        {
+            var quiz = await _context.Quizzes.FindAsync(id);
+            if (quiz == null)
+                return NotFound();
+
             return Ok(new QuizReadDto
             {
                 Id = quiz.Id,
@@ -73,83 +194,50 @@ namespace Back.Controllers
             });
         }
 
-        // ============================
-        // ADD QUESTION TO QUIZ (FINAL FIX)
-        // ============================
-        [Authorize(Roles = "Instructor,Admin")]
-        [HttpPost("{quizId}/questions")]
-        public async Task<IActionResult> AddQuestionToQuiz(
-            int quizId,
-            [FromBody] QuestionCreateDto dto)
+        // ===============================
+        // SUBMIT QUIZ
+        // ===============================
+        [Authorize(Roles = "Student")]
+        [HttpPost("{quizId}/submit")]
+        public async Task<IActionResult> SubmitQuiz(int quizId, [FromBody] QuizSubmitDto dto)
         {
-            try
-            {
-                // 1️⃣ Check quiz exists
-                var quiz = await _context.Quizzes.FindAsync(quizId);
-                if (quiz == null)
-                    return NotFound("Quiz not found");
+            var quiz = await _context.Quizzes
+                .Include(q => q.Questions)
+                .ThenInclude(q => q.Answers)
+                .FirstOrDefaultAsync(q => q.Id == quizId);
 
-                // 2️⃣ Parse QuestionType enum
-                if (!Enum.TryParse<QuestionType>(dto.QuestionType, true, out var parsedType))
-                    return BadRequest("Invalid QuestionType");
-
-                // 3️⃣ Create question (Points MUST be set)
-                var question = new Question
-                {
-                    Text = dto.QuestionText,
-                    Type = parsedType,
-                    QuizId = quizId,
-                    Points = 1 // IMPORTANT: prevents DB constraint failure
-                };
-
-                _context.Questions.Add(question);
-                await _context.SaveChangesAsync();
-
-                // 4️⃣ Add answers (validate text to avoid DB crash)
-                if (dto.Answers != null && dto.Answers.Any())
-                {
-                    foreach (var a in dto.Answers)
-                    {
-                        if (string.IsNullOrWhiteSpace(a.AnswerText))
-                            return BadRequest("AnswerText cannot be empty");
-
-                        var answer = new Answer
-                        {
-                            Text = a.AnswerText,
-                            IsCorrect = a.IsCorrect,
-                            QuestionId = question.Id
-                        };
-
-                        _context.Answers.Add(answer);
-                    }
-
-                    await _context.SaveChangesAsync();
-                }
-
-                return Ok();
-            }
-            catch (Exception ex)
-            {
-                // 🔥 expose real EF Core error instead of silent 500
-                return StatusCode(500, ex.ToString());
-            }
-        }
-
-        // ============================
-        // DELETE quiz
-        // ============================
-        [Authorize(Roles = "Instructor,Admin")]
-        [HttpDelete("{id}")]
-        public async Task<IActionResult> DeleteQuiz(int id)
-        {
-            var quiz = await _context.Quizzes.FindAsync(id);
             if (quiz == null)
                 return NotFound();
 
-            _context.Quizzes.Remove(quiz);
+            int score = 0;
+
+            foreach (var submitted in dto.Answers)
+            {
+                var question = quiz.Questions.FirstOrDefault(q => q.Id == submitted.QuestionId);
+                if (question == null) continue;
+
+                var correct = question.Answers.FirstOrDefault(a =>
+                    a.Id == submitted.SelectedAnswerId && a.IsCorrect);
+
+                if (correct != null)
+                    score++;
+            }
+
+            var attempt = new QuizAttempt
+            {
+                QuizId = quizId,
+                UserId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)),
+                Score = score
+            };
+
+            _context.QuizAttempts.Add(attempt);
             await _context.SaveChangesAsync();
 
-            return NoContent();
+            return Ok(new QuizResultDto
+            {
+                Score = score,
+                Passed = score >= quiz.PassingScore
+            });
         }
     }
 }

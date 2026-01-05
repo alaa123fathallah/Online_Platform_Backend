@@ -163,9 +163,9 @@ namespace Back.Migrations
                 {
                     Id = table.Column<int>(type: "int", nullable: false)
                         .Annotation("SqlServer:Identity", "1, 1"),
+                    Title = table.Column<string>(type: "nvarchar(max)", nullable: false),
                     CourseId = table.Column<int>(type: "int", nullable: false),
                     LessonId = table.Column<int>(type: "int", nullable: true),
-                    Title = table.Column<string>(type: "nvarchar(max)", nullable: false),
                     PassingScore = table.Column<int>(type: "int", nullable: false),
                     TimeLimit = table.Column<int>(type: "int", nullable: false)
                 },
@@ -216,9 +216,9 @@ namespace Back.Migrations
                         .Annotation("SqlServer:Identity", "1, 1"),
                     QuizId = table.Column<int>(type: "int", nullable: false),
                     UserId = table.Column<int>(type: "int", nullable: false),
-                    Score = table.Column<int>(type: "int", nullable: true),
-                    IsPassed = table.Column<bool>(type: "bit", nullable: false),
-                    IsGraded = table.Column<bool>(type: "bit", nullable: false)
+                    Score = table.Column<int>(type: "int", nullable: false),
+                    Passed = table.Column<bool>(type: "bit", nullable: false),
+                    AttemptedAt = table.Column<DateTime>(type: "datetime2", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -227,6 +227,12 @@ namespace Back.Migrations
                         name: "FK_QuizAttempts_Quizzes_QuizId",
                         column: x => x.QuizId,
                         principalTable: "Quizzes",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "FK_QuizAttempts_Users_UserId",
+                        column: x => x.UserId,
+                        principalTable: "Users",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                 });
@@ -248,29 +254,6 @@ namespace Back.Migrations
                         name: "FK_Answers_Questions_QuestionId",
                         column: x => x.QuestionId,
                         principalTable: "Questions",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "StudentAnswer",
-                columns: table => new
-                {
-                    Id = table.Column<int>(type: "int", nullable: false)
-                        .Annotation("SqlServer:Identity", "1, 1"),
-                    QuizAttemptId = table.Column<int>(type: "int", nullable: false),
-                    QuestionId = table.Column<int>(type: "int", nullable: false),
-                    SelectedAnswerId = table.Column<int>(type: "int", nullable: true),
-                    TextAnswer = table.Column<string>(type: "nvarchar(max)", nullable: false),
-                    PointsAwarded = table.Column<int>(type: "int", nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_StudentAnswer", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_StudentAnswer_QuizAttempts_QuizAttemptId",
-                        column: x => x.QuizAttemptId,
-                        principalTable: "QuizAttempts",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                 });
@@ -326,6 +309,11 @@ namespace Back.Migrations
                 column: "QuizId");
 
             migrationBuilder.CreateIndex(
+                name: "IX_QuizAttempts_UserId",
+                table: "QuizAttempts",
+                column: "UserId");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_Quizzes_CourseId",
                 table: "Quizzes",
                 column: "CourseId");
@@ -334,11 +322,6 @@ namespace Back.Migrations
                 name: "IX_Quizzes_LessonId",
                 table: "Quizzes",
                 column: "LessonId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_StudentAnswer_QuizAttemptId",
-                table: "StudentAnswer",
-                column: "QuizAttemptId");
         }
 
         /// <inheritdoc />
@@ -357,16 +340,13 @@ namespace Back.Migrations
                 name: "LessonsCompletion");
 
             migrationBuilder.DropTable(
-                name: "StudentAnswer");
+                name: "QuizAttempts");
 
             migrationBuilder.DropTable(
                 name: "Questions");
 
             migrationBuilder.DropTable(
                 name: "Users");
-
-            migrationBuilder.DropTable(
-                name: "QuizAttempts");
 
             migrationBuilder.DropTable(
                 name: "Quizzes");
