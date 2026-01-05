@@ -42,7 +42,7 @@ namespace Back.Controllers
         }
 
         // ===============================
-        // UPDATE QUIZ  ✅ ADDED
+        // UPDATE QUIZ
         // ===============================
         [Authorize(Roles = "Instructor")]
         [HttpPut("{id}")]
@@ -63,7 +63,7 @@ namespace Back.Controllers
         }
 
         // ===============================
-        // DELETE QUIZ  ✅ ADDED
+        // DELETE QUIZ
         // ===============================
         [Authorize(Roles = "Instructor")]
         [HttpDelete("{id}")]
@@ -238,6 +238,105 @@ namespace Back.Controllers
                 Score = score,
                 Passed = score >= quiz.PassingScore
             });
+        }
+
+        // ===============================
+        // GET QUIZ BY LESSON (STUDENT)
+        // ===============================
+        [Authorize(Roles = "Student")]
+        [HttpGet("lesson/{lessonId}")]
+        public async Task<IActionResult> GetQuizByLesson(int lessonId)
+        {
+            var quiz = await _context.Quizzes
+                .Where(q => q.LessonId == lessonId)
+                .Select(q => new QuizReadDto
+                {
+                    Id = q.Id,
+                    Title = q.Title,
+                    CourseId = q.CourseId,
+                    LessonId = q.LessonId,
+                    PassingScore = q.PassingScore,
+                    TimeLimit = q.TimeLimit
+                })
+                .FirstOrDefaultAsync();
+
+            if (quiz == null)
+                return NotFound();
+
+            return Ok(quiz);
+        }
+
+        // ======================================================
+        // INSTRUCTOR: GET QUIZ SUBMISSIONS
+        // ======================================================
+        [Authorize(Roles = "Instructor")]
+        [HttpGet("{quizId}/submissions")]
+        public async Task<IActionResult> GetQuizSubmissions(int quizId)
+        {
+            var submissions = await _context.QuizAttempts
+                .Where(a => a.QuizId == quizId)
+                .Include(a => a.User)
+                .Select(a => new
+                {
+                    AttemptId = a.Id,
+                    UserId = a.User.Id,
+                    FullName = a.User.FullName,
+                    Email = a.User.Email,
+                    Score = a.Score
+                })
+                .ToListAsync();
+
+            return Ok(submissions);
+        }
+
+
+        // ======================================================
+        // 🆕 INSTRUCTOR: GET QUIZ ATTEMPT DETAILS
+        // ======================================================
+        [Authorize(Roles = "Instructor")]
+        [HttpGet("attempt/{attemptId}")]
+        public async Task<IActionResult> GetQuizAttempt(int attemptId)
+        {
+            var attempt = await _context.QuizAttempts
+                .Include(a => a.Quiz)
+                    .ThenInclude(q => q.Questions)
+                        .ThenInclude(q => q.Answers)
+                .FirstOrDefaultAsync(a => a.Id == attemptId);
+
+            if (attempt == null)
+                return NotFound();
+
+            return Ok(new
+            {
+                AttemptId = attempt.Id,
+                Score = attempt.Score,
+                Questions = attempt.Quiz.Questions.Select(q => new
+                {
+                    QuestionText = q.Text,
+                    Answers = q.Answers.Select(a => new
+                    {
+                        AnswerText = a.Text,
+                        IsCorrect = a.IsCorrect
+                    })
+                })
+            });
+        }
+
+        // ======================================================
+        // 🆕 INSTRUCTOR: GRADE / OVERRIDE SCORE
+        // ======================================================
+        [Authorize(Roles = "Instructor")]
+        [HttpPut("attempt/{attemptId}/grade")]
+        public async Task<IActionResult> GradeQuizAttempt(int attemptId, [FromBody] int score)
+        {
+            var attempt = await _context.QuizAttempts.FindAsync(attemptId);
+            if (attempt == null)
+                return NotFound();
+
+            attempt.Score = score;
+            await _context.SaveChangesAsync();
+
+            return Ok();
         }
     }
 }

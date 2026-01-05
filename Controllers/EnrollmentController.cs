@@ -135,5 +135,27 @@ namespace Back.Controllers
 
             return Ok(enrollments);
         }
+        // ===============================
+        // INSTRUCTOR: GET COURSE STUDENTS (WITH USER INFO)
+        // ===============================
+        [Authorize(Roles = "Instructor,Admin")]
+        [HttpGet("course/{courseId}/students")]
+        public async Task<IActionResult> GetCourseStudents(int courseId)
+        {
+            var students = await _context.Enrollments
+                .Where(e => e.CourseId == courseId)
+                .Include(e => e.User)
+                .Select(e => new
+                {
+                    UserId = e.User.Id,
+                    FullName = e.User.FullName,
+                    Email = e.User.Email,
+                    EnrolledAt = e.EnrolledAt
+                })
+                .ToListAsync();
+
+            return Ok(students);
+        }
+
     }
 }
